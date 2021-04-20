@@ -13,9 +13,14 @@ ap.add_argument(
     help="wav output file",
 )
 ap.add_argument(
-    "-b", "--bands",
-    help="comma-separated list of band amplitudes",
+    "-a", "--ampls",
+    help="comma-separated list of relative band amplitudes in dB",
     default = "1.0"
+)
+ap.add_argument(
+    "-f", "--freqs",
+    help="comma-separated list of band frequency splitpoints in Hz",
+    default = ""
 )
 ap.add_argument(
     "wavfile",
@@ -80,15 +85,15 @@ params, samples = read(args.wavfile)
 # Calculate band boundaries and amplitudes.
 # Frequencies and amplitudes should be log-scaled,
 # but currently are not.
-bandpoints = [float(b) for b in args.bands.split(",")]
-nbands = len(bandpoints)
+bandampls = [10**(float(b)/20) for b in args.ampls.split(",")]
+nbands = len(bandampls)
 # The real FFT will return positive frequencies only,
 # which is fine for our purposes. This means that
 # the returned block will be half-sized. It will
 # also return the DC component at position 0, which
 # we will remove as irrelevant.
 bands = [0]
-for b in bandpoints:
+for b in bandampls:
     bands += [b] * (BLOCKSIZE // 2 // nbands)
 # Pad out the last band because rounding error.
 bands += [0] * (BLOCKSIZE // 2 + 1 - len(bands))
