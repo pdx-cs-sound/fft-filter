@@ -17,7 +17,6 @@ ap.add_argument(
 ap.add_argument(
     "-f", "--freqs",
     help="comma-separated list of band frequency splitpoints in Hz",
-    default = ""
 )
 ap.add_argument(
     "-b", "--blocksize",
@@ -96,16 +95,27 @@ params, samples = read(args.wavfile)
 # should be log-scaled, but currently are not.
 bandampls = [10**(float(b)/20) for b in args.ampls.replace("+", "").split(",")]
 nbands = len(bandampls)
+bandsplits = [b / nbands for b in range(1, nbands)]
+if args.freqs is not None:
+    freqs = [int(f) for f in args.freqs.split(",")]
+    assert len(freqs) == nbands - 1
+    bandsplits = [2 * f / SAMPLE_RATE for f in freqs]
+print(bandsplits)
+
 # The real FFT will return positive frequencies only,
 # which is fine for our purposes. This means that
 # the returned block will be half-sized. It will
 # also return the DC component at position 0, which
 # we will remove as irrelevant.
 bands = [0]
-for b in bandampls:
-    bands += [b] * (blocksize // 2 // nbands)
+b = 0
+for i in range(blocksize // 2):
+    f = 2 * i / blocksize
+    while b < nbands - 1 and bandsplits[b] < f:
+        print("f", f)
+        b += 1
+    bands.append(bandampls[b])
 # Pad out the last band because rounding error.
-bands += [0] * (blocksize // 2 + 1 - len(bands))
 bandampls = numpy.array(bands)
 assert len(bandampls) == blocksize // 2 + 1
 
