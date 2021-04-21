@@ -95,7 +95,7 @@ params, samples = read(args.wavfile)
 # should be log-scaled, but currently are not.
 bandampls = [10**(float(b)/20) for b in args.ampls.replace("+", "").split(",")]
 nbands = len(bandampls)
-bandsplits = [b / nbands for b in range(1, nbands)]
+bandsplits = [2**(b - nbands) for b in range(1, nbands)]
 if args.freqs is not None:
     freqs = [int(f) for f in args.freqs.split(",")]
     assert len(freqs) == nbands - 1
