@@ -1,9 +1,6 @@
 import argparse, numpy, pyaudio, struct, sys, wave
 from scipy import fft
 
-# Sample rate in frames per second.
-SAMPLE_RATE = 48_000
-
 ap = argparse.ArgumentParser()
 ap.add_argument(
     "-o", "--outfile",
@@ -35,17 +32,25 @@ ap.add_argument(
 )
 args = ap.parse_args()
 
+blocksize = args.blocksize
+if args.lap is None:
+    lap = blocksize // 32
+else:
+    lap = args.lap
+
 # Read a wave file.
 def read(filename):
     with wave.open(filename, "rb") as w:
         assert w.getnchannels() == 1
         assert w.getsampwidth() == 2
-        assert w.getframerate() == SAMPLE_RATE
         nframes = w.getnframes()
         frames = w.readframes(nframes)
         framedata = struct.unpack(f"<{nframes}h", frames)
         samples = [s / (1 << 15) for s in framedata]
-        return w.getparams(), samples
+        return w.getparams(), samples, w.getframerate()
+
+# Collect the samples.
+params, samples, sample_rate = read(args.wavfile)
 
 # Write a wave file.
 def write(f, samples, params):
@@ -56,14 +61,12 @@ def write(f, samples, params):
         w.setparams(params)
         w.writeframes(frames)
 
-blocksize = args.blocksize
-
 # Play a tone on the computer.
 def play(samples):
     # Set up and start the stream.
     pa = pyaudio.PyAudio()
     stream = pa.open(
-        rate = SAMPLE_RATE,
+        rate = sample_rate,
         channels = 1,
         format = pyaudio.paFloat32,
         output = True,
@@ -88,9 +91,6 @@ def play(samples):
     # Tear down the stream.
     stream.close()
 
-# Collect the samples.
-params, samples = read(args.wavfile)
-
 # Calculate band boundaries and amplitudes.  Frequencies
 # should be log-scaled, but currently are not.
 bandampls = [10**(float(b)/20) for b in args.ampls.replace("+", "").split(",")]
@@ -99,8 +99,7 @@ bandsplits = [2**(b - nbands) for b in range(1, nbands)]
 if args.freqs is not None:
     freqs = [int(f) for f in args.freqs.split(",")]
     assert len(freqs) == nbands - 1
-    bandsplits = [2 * f / SAMPLE_RATE for f in freqs]
-print(bandsplits)
+    bandsplits = [2 * f / sample_rate for f in freqs]
 
 # The real FFT will return positive frequencies only,
 # which is fine for our purposes. This means that
@@ -112,7 +111,6 @@ b = 0
 for i in range(blocksize // 2):
     f = 2 * i / blocksize
     while b < nbands - 1 and bandsplits[b] < f:
-        print("f", f)
         b += 1
     bands.append(bandampls[b])
 # Pad out the last band because rounding error.
@@ -120,10 +118,6 @@ bandampls = numpy.array(bands)
 assert len(bandampls) == blocksize // 2 + 1
 
 # Build the window.
-if args.lap is None:
-    lap = blocksize // 32
-else:
-    lap = args.lap
 trap1 = numpy.linspace(0, 1, lap, endpoint=False)
 trap2 = numpy.ones(blocksize - 2 * lap)
 trap3 = 1 - trap1
