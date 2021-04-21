@@ -4,9 +4,6 @@ from scipy import fft
 # Sample rate in frames per second.
 SAMPLE_RATE = 48_000
 
-# Sample block size in frames.
-BLOCKSIZE = 4096
-
 ap = argparse.ArgumentParser()
 ap.add_argument(
     "-o", "--outfile",
@@ -21,6 +18,17 @@ ap.add_argument(
     "-f", "--freqs",
     help="comma-separated list of band frequency splitpoints in Hz",
     default = ""
+)
+ap.add_argument(
+    "-b", "--blocksize",
+    help="block size in frames",
+    type=int,
+    default = 4096,
+)
+ap.add_argument(
+    "-l", "--lap",
+    help="window overlap in frames",
+    type=int,
 )
 ap.add_argument(
     "wavfile",
@@ -49,6 +57,8 @@ def write(f, samples, params):
         w.setparams(params)
         w.writeframes(frames)
 
+blocksize = args.blocksize
+
 # Play a tone on the computer.
 def play(samples):
     # Set up and start the stream.
@@ -58,7 +68,7 @@ def play(samples):
         channels = 1,
         format = pyaudio.paFloat32,
         output = True,
-        frames_per_buffer = BLOCKSIZE,
+        frames_per_buffer = blocksize,
     )
 
     # Write the samples.
@@ -66,7 +76,7 @@ def play(samples):
     done = False
     while not done:
         buffer = list()
-        for _ in range(BLOCKSIZE):
+        for _ in range(blocksize):
             try:
                 sample = next(wav)
             except StopIteration:
@@ -82,9 +92,8 @@ def play(samples):
 # Collect the samples.
 params, samples = read(args.wavfile)
 
-# Calculate band boundaries and amplitudes.
-# Frequencies and amplitudes should be log-scaled,
-# but currently are not.
+# Calculate band boundaries and amplitudes.  Frequencies
+# should be log-scaled, but currently are not.
 bandampls = [10**(float(b)/20) for b in args.ampls.split(",")]
 nbands = len(bandampls)
 # The real FFT will return positive frequencies only,
@@ -94,16 +103,19 @@ nbands = len(bandampls)
 # we will remove as irrelevant.
 bands = [0]
 for b in bandampls:
-    bands += [b] * (BLOCKSIZE // 2 // nbands)
+    bands += [b] * (blocksize // 2 // nbands)
 # Pad out the last band because rounding error.
-bands += [0] * (BLOCKSIZE // 2 + 1 - len(bands))
+bands += [0] * (blocksize // 2 + 1 - len(bands))
 bandampls = numpy.array(bands)
-assert len(bandampls) == BLOCKSIZE // 2 + 1
+assert len(bandampls) == blocksize // 2 + 1
 
 # Build the window.
-lap = BLOCKSIZE // 32
+if args.lap is None:
+    lap = blocksize // 32
+else:
+    lap = args.lap
 trap1 = numpy.linspace(0, 1, lap, endpoint=False)
-trap2 = numpy.ones(BLOCKSIZE - 2 * lap)
+trap2 = numpy.ones(blocksize - 2 * lap)
 trap3 = 1 - trap1
 window = numpy.append(trap1, trap2)
 window = numpy.append(window, trap3)
@@ -113,13 +125,13 @@ nsamples = len(samples)
 insamples = numpy.array(samples)
 outsamples = numpy.zeros(nsamples)
 start = 0
-while start + BLOCKSIZE <= nsamples:
-    samples_in = samples[start:start + BLOCKSIZE] * window
+while start + blocksize <= nsamples:
+    samples_in = samples[start:start + blocksize] * window
     freqs = fft.rfft(samples_in)
     freqs *= bandampls
     samples_out = fft.irfft(freqs)
-    outsamples[start:start + BLOCKSIZE] += samples_out * window
-    start += BLOCKSIZE - lap
+    outsamples[start:start + blocksize] += samples_out * window
+    start += blocksize - lap
 
 # Play the result.
 if args.outfile:
