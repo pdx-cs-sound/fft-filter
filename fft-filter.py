@@ -94,7 +94,7 @@ params, samples = read(args.wavfile)
 
 # Calculate band boundaries and amplitudes.  Frequencies
 # should be log-scaled, but currently are not.
-bandampls = [10**(float(b)/20) for b in args.ampls.split(",")]
+bandampls = [10**(float(b)/20) for b in args.ampls.replace("+", "").split(",")]
 nbands = len(bandampls)
 # The real FFT will return positive frequencies only,
 # which is fine for our purposes. This means that
