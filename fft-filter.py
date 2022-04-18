@@ -1,4 +1,4 @@
-import argparse, numpy, pyaudio, struct, sys, wave
+import argparse, numpy, sounddevice, struct, sys, wave
 from scipy import fft
 
 ap = argparse.ArgumentParser()
@@ -64,14 +64,13 @@ def write(f, samples, params):
 # Play a tone on the computer.
 def play(samples):
     # Set up and start the stream.
-    pa = pyaudio.PyAudio()
-    stream = pa.open(
-        rate = sample_rate,
+    stream = sounddevice.RawOutputStream(
+        samplerate = sample_rate,
+        blocksize = blocksize,
         channels = 1,
-        format = pyaudio.paFloat32,
-        output = True,
-        frames_per_buffer = blocksize,
+        dtype = 'float32',
     )
+    stream.start()
 
     # Write the samples.
     wav = iter(samples)
@@ -86,9 +85,10 @@ def play(samples):
                 break
             buffer.append(sample)
         pbuffer = struct.pack(f"{len(buffer)}f", *buffer)
-        stream.write(pbuffer)
+        assert not stream.write(pbuffer), "overrun"
 
     # Tear down the stream.
+    stream.stop()
     stream.close()
 
 # Calculate band boundaries and amplitudes.  Frequencies
