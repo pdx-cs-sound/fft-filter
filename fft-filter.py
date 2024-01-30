@@ -27,6 +27,11 @@ ap.add_argument(
     type=int,
 )
 ap.add_argument(
+    "-p", "--phase",
+    help="phase canceling",
+    action="store_true",
+)
+ap.add_argument(
     "wavfile",
     help="wav input file",
 )
@@ -132,10 +137,14 @@ start = 0
 while start + blocksize <= nsamples:
     samples_in = samples[start:start + blocksize] * window
     freqs = fft.rfft(samples_in)
+    if args.phase:
+        freqs = numpy.abs(freqs)
     freqs *= bandampls
     samples_out = fft.irfft(freqs)
     outsamples[start:start + blocksize] += samples_out * window
     start += blocksize - lap
+
+outsamples = numpy.clip(outsamples, -0.95, 0.95)
 
 # Play the result.
 if args.outfile:
