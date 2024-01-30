@@ -73,9 +73,13 @@ def play(samples):
     stream.stop()
     stream.close()
 
-outsamples = np.array([0.0] * (len(samples) + blocksize - 1))
-for i in range(blocksize):
-    outsamples += np.append(np.array([0.0] * (i - 1)), samples[:-i])
+outsamples = np.append(samples, np.array([0.0] * (blocksize - 1)))
+for i in range(1, blocksize):
+    outsamples += np.concatenate((
+        np.array([0.0] * i),
+        samples,
+        np.array([0.0] * (blocksize - i - 1)),
+    ))
 outsamples /= blocksize
 
 outsamples = np.clip(outsamples, -0.95, 0.95)
